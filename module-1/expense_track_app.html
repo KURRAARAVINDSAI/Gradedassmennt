@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 800px;
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        .form-section {
+            margin-bottom: 20px;
+        }
+
+        .form-section input, .form-section select {
+            width: calc(33.33% - 10px);
+            margin-right: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        .form-section button {
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .form-section button:hover {
+            background-color: #218838;
+        }
+
+        .expense-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        .expense-table th, .expense-table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .expense-table th {
+            background-color: #f8f9fa;
+            color: #333;
+        }
+
+        .summary {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .chart-container {
+            margin-top: 20px;
+        }
+
+        @media (max-width: 600px) {
+            .form-section input, .form-section select {
+                width: 100%;
+                margin: 5px 0;
+            }
+
+            .form-section button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Expense Tracker</h1>
+
+        <div class="form-section">
+            <input type="number" id="amount" placeholder="Amount" min="0">
+            <input type="text" id="description" placeholder="Description">
+            <select id="category">
+                <option value="">Select Category</option>
+                <option value="Food">Food</option>
+                <option value="Travel">Travel</option>
+                <option value="Shopping">Shopping</option>
+                <option value="Other">Other</option>
+            </select>
+            <button id="add-expense">Add Expense</button>
+        </div>
+
+        <table class="expense-table" id="expense-table">
+            <thead>
+                <tr>
+                    <th>Amount</th>
+                    <th>Description</th>
+                    <th>Category</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <div class="summary" id="summary"></div>
+
+        <div class="chart-container">
+            <canvas id="expense-chart"></canvas>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        const amountInput = document.getElementById('amount');
+        const descriptionInput = document.getElementById('description');
+        const categorySelect = document.getElementById('category');
+        const addExpenseButton = document.getElementById('add-expense');
+        const expenseTable = document.getElementById('expense-table').querySelector('tbody');
+        const summaryDiv = document.getElementById('summary');
+        const expenseChartCanvas = document.getElementById('expense-chart');
+        let chart;
+
+        function saveExpenses() {
+            const expenses = [];
+            document.querySelectorAll('.expense-row').forEach(row => {
+                expenses.push({
+                    amount: parseFloat(row.dataset.amount),
+                    description: row.dataset.description,
+                    category: row.dataset.category
+                });
+            });
+            localStorage.setItem('expenses', JSON.stringify(expenses));
+        }
+
+        function loadExpenses() {
+            const savedExpenses = JSON.parse(localStorage.getItem('expenses') || '[]');
+            savedExpenses.forEach(expense => addExpenseToTable(expense.amount, expense.description, expense.category));
+            updateSummaryAndChart();
+        }
+
+        function addExpenseToTable(amount, description, category) {
+            const row = document.createElement('tr');
+            row.classList.add('expense-row');
+            row.dataset.amount = amount;
+            row.dataset.description = description;
+            row.dataset.category = category;
+
+            row.innerHTML = `
+                <td>${amount.toFixed(2)}</td>
+                <td>${description}</td>
+                <td>${category}</td>
+                <td><button onclick="deleteExpense(this)">Delete</button></td>
+            `;
+
+            expenseTable.appendChild(row);
+            saveExpenses();
+            updateSummaryAndChart();
+        }
+
+        function deleteExpense(button) {
+            button.closest('tr').remove();
+            saveExpenses();
+            updateSummaryAndChart();
+        }
+
+        function updateSummaryAndChart() {
+            const categoryTotals = {};
+            document.querySelectorAll('.expense-row').forEach(row => {
+                const category = row.dataset.category;
+                const amount = parseFloat(row.dataset.amount);
+                categoryTotals[category] = (categoryTotals[category] || 0) + amount;
+            });
+
+            // Update summary
+            summaryDiv.innerHTML = Object.keys(categoryTotals).map(category => `
+                <div><strong>${category}:</strong> $${categoryTotals[category].toFixed(2)}</div>
+            `).join('');
+
+            // Update chart
+            if (chart) chart.destroy();
+            chart = new Chart(expenseChartCanvas, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(categoryTotals),
+                    datasets: [{
+                        data: Object.values(categoryTotals),
+                        backgroundColor: ['#ff6384', '#36a2eb', '#ffcd56', '#4bc0c0']
+                    }]
+                }
+            });
+        }
+
+        addExpenseButton.addEventListener('click', () => {
+            const amount = parseFloat(amountInput.value);
+            const description = descriptionInput.value.trim();
+            const category = categorySelect.value;
+
+            if (!amount || !description || !category) {
+                alert('Please fill out all fields!');
+                return;
+            }
+
+            addExpenseToTable(amount, description, category);
+
+            // Clear inputs
+            amountInput.value = '';
+            descriptionInput.value = '';
+            categorySelect.value = '';
+        });
+
+        // Initialize the application
+        loadExpenses();
+    </script>
+</body>
+</html>
